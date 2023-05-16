@@ -128,6 +128,7 @@ class Questions(Data):
 
         # Answer mappings
         answers = data[self.answer][index]
+        answer_start = data[self.answer_start][index]
         context = data[self.context][index]
 
         # Handle mapping string answers to dict
