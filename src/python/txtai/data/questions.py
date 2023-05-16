@@ -136,6 +136,6 @@ class Questions(Data):
             if not answers:
                 answers = {"text": [], "answer_start": []}
             else:
-                answers = {"text": [answers], "answer_start": [int(answer_start)]}#context.index(answers)
+                answers = {"text": [answers], "answer_start": [int("answer_start")]}#context.index(answers)
 
         return answers
