@@ -1,3 +1,6 @@
+from .base import Data
+
+
 class Questions(Data):
     """
     Tokenizes question-answering datasets as input for training question-answering models.
