@@ -144,8 +144,7 @@ class HFTrainer(Tensors):
         """
 
         # Default training arguments
-        #args = {"output_dir": "", "save_strategy": "no", "report_to": "none", "log_level": "warning"}
-        args = {"output_dir": "", "save_strategy": "no", "report_to": "none", "log_level": "warning", "callbacks": ""}
+        args = {"output_dir": "", "save_strategy": "no", "report_to": "none", "log_level": "warning"}
 
         # Apply custom arguments
         args.update(updates)
