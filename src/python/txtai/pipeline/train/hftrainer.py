@@ -14,6 +14,7 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    EarlyStoppingCallback##
 )
 from transformers import DataCollatorForLanguageModeling, DataCollatorForSeq2Seq, Trainer, set_seed
 from transformers import TrainingArguments as HFTrainingArguments
@@ -105,7 +106,11 @@ class HFTrainer(Tensors):
         # Add model to collator
         if collator:
             collator.model = model
-
+        # Build trainer with early stopping callback##
+        early_stopping_callback = EarlyStoppingCallback(
+            early_stopping_patience=args.early_stopping_patience,
+            early_stopping_threshold=args.early_stopping_threshold
+        )##
         # Build trainer
         trainer = Trainer(
             model=model,
@@ -115,6 +120,8 @@ class HFTrainer(Tensors):
             train_dataset=train,
             eval_dataset=validation if validation else None,
             compute_metrics=metrics,
+            callbacks=[early_stopping_callback]##
+
         )
 
         # Run training
