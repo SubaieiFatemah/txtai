@@ -233,7 +233,9 @@ class TrainingArguments(HFTrainingArguments):
     """
     Extends standard TrainingArguments to make the output directory optional for transient models.
     """
-
+    def __init__(self, *args, **kwargs):##
+        super().__init__(*args, **kwargs)
+        self.do_early_stopping = False##
     @property
     def should_save(self):
         """
