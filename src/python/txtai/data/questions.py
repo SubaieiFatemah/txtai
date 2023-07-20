@@ -1,141 +1,93 @@
 """
-Questions module
+A script to:
+ - read a JSONL (JSON Lines) dataset into objects of class PassageQuestion
+ - write the PassageQuestion objects to another JSONL file
+
 """
+import json,argparse
 
-from .base import Data
-
-
-class Questions(Data):
+def load_jsonl(input_path) -> list:
     """
-    Tokenizes question-answering datasets as input for training question-answering models.
+    Read list of objects from a JSON lines file.
     """
+    data = []
+    with open(input_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            data.append(json.loads(line.rstrip('\n|\r')))
+    print('Loaded {} records from {}'.format(len(data), input_path))
+    return data
 
-    def __init__(self, tokenizer, columns, maxlength, stride):
-        """
-        Creates a new instance for tokenizing Questions training data.
+def dump_jsonl(data, output_path, append=False):
+    """
+    Write list of objects to a JSON lines file.
+    """
+    mode = 'a+' if append else 'w'
+    with open(output_path, mode, encoding='utf-8') as f:
+        for line in data:
+            json_record = json.dumps(line, ensure_ascii=False)
+            f.write(json_record + '\n')
+    print('Wrote {} records to {}'.format(len(data), output_path))
 
-        Args:
-            tokenizer: model tokenizer
-            columns: tuple of columns to use for question/context/answer
-            maxlength: maximum sequence length
-            stride: chunk size for splitting data for QA tasks
-        """
+class Answer():
+    def __init__(self, dictionary) -> None:
+        self.text = dictionary["text"]
+        self.start_char = dictionary["start_char"]       
 
-        super().__init__(tokenizer, columns, maxlength)
+    def to_dict(self) -> dict:
+        answer_dict = {
+            "text": self.text,
+            "start_char":self.start_char
+        }
+        return answer_dict
 
-        if not self.columns:
-            self.columns = ("question", "context", "answers", "answer_start")
+class PassageQuestion:
+    def __init__(self, dictionary):
+        self.pq_id = None
+        self.passage = None
+        self.question = None
+        self.answers = []
+        self.pq_id = dictionary["pq_id"]
+        self.passage = dictionary["passage"]
+        self.question = dictionary["question"]
+        for answer in dictionary["answers"]:
+            self.answers.append(Answer(answer))
 
-        self.question, self.context, self.answer, self.answer_start = self.columns#assigning
-        self.stride = stride
-        self.rpad = tokenizer.padding_side == "right"
+    def to_dict(self):
+        passage_question_dict = {
+            "pq_id": self.pq_id,
+            "passage": self.passage,
+            "question": self.question,
+            "answers":[x.to_dict() for x in self.answers]
+        }
+        return passage_question_dict
 
-    def process(self, data):
-        # Tokenize data
-        tokenized = self.tokenize(data)
+def read_JSONL_file(file_path) -> list:
+    data_in_file = load_jsonl(file_path)
 
-        # Get mapping of overflowing tokens and answer offsets
-        samples = tokenized.pop("overflow_to_sample_mapping")
-        offsets = tokenized.pop("offset_mapping")
+    # get list of PassageQuestion objects
+    passage_question_objects = []
+    for passage_question_dict in data_in_file:
+        # instantiate a PassageQuestion object
+        pq_object = PassageQuestion(passage_question_dict)
+        print (f"pq_id: {pq_object.pq_id}")
+        passage_question_objects.append(pq_object)
 
-        # Start/end positions
-        tokenized["start_positions"] = []
-        tokenized["end_positions"] = []
+    print(f"Collected {len(passage_question_objects)} Object from {file_path}")
+    return passage_question_objects
 
-        for x, offset in enumerate(offsets):
-            # Label NO ANSWER with CLS token
-            inputids = tokenized["input_ids"][x]
-            clstoken = inputids.index(self.tokenizer.cls_token_id)
+def write_to_JSONL_file(passage_question_objects,output_path) -> None:
 
-            # Sequence ids
-            sequences = tokenized.sequence_ids(x)
+    # list of dictionaries for the passage_question_objects
+    dict_data_list = []
+    for pq_object in passage_question_objects:
+        dict_data = pq_object.to_dict()
+        dict_data_list.append(dict_data)
+    dump_jsonl(dict_data_list,output_path)
 
-            # Get and format answer
-            answers = self.answers(data, samples[x])
-
-            # If no answers are given, set cls token as answer.
-            if len(answers["answer_start"]) == 0:
-                tokenized["start_positions"].append(clstoken)
-                tokenized["end_positions"].append(clstoken)
-            else:
-                # Start/end character index of the answer in the text.
-                startchar = answers["answer_start"][0]
-                endchar = startchar + len(answers["text"][0])
-
-                # Start token index of the current span in the text.
-                start = 0
-                while sequences[start] != (1 if self.rpad else 0):
-                    start += 1
-
-                # End token index of the current span in the text.
-                end = len(inputids) - 1
-                while sequences[end] != (1 if self.rpad else 0):
-                    end -= 1
-
-                # Label with CLS token if out of span
-                if not (offset[start][0] <= startchar and offset[end][1] >= endchar):
-                    tokenized["start_positions"].append(clstoken)
-                    tokenized["end_positions"].append(clstoken)
-                else:
-                    # Map start character and end character to matching token index
-                    while start < len(offset) and offset[start][0] <= startchar:
-                        start += 1
-                    tokenized["start_positions"].append(start - 1)
-
-                    while offset[end][1] >= endchar:
-                        end -= 1
-                    tokenized["end_positions"].append(end + 1)
-
-        return tokenized
-
-    def tokenize(self, data):
-        """
-        Tokenizes batch of data
-
-        Args:
-            data: input data batch
-
-        Returns:
-            tokenized data
-        """
-
-        # Trim question whitespace
-        data[self.question] = [x.lstrip() for x in data[self.question]]
-
-        # Tokenize records
-        return self.tokenizer(
-            data[self.question if self.rpad else self.context],
-            data[self.context if self.rpad else self.question],
-            truncation="only_second" if self.rpad else "only_first",
-            max_length=self.maxlength,
-            stride=self.stride,
-            return_overflowing_tokens=True,
-            return_offsets_mapping=True,
-            padding=True,
-        )
-
-    def answers(self, data, index):
-        """
-        Gets and formats an answer.
-
-        Args:
-            data: input examples
-            index: answer index to retrieve
-
-        Returns:
-            answers dict
-        """
-
-        # Answer mappings
-        answers = data[self.answer][index]
-        answer_start = data[self.answer_start][index]
-        context = data[self.context][index]
-
-        # Handle mapping string answers to dict
-        if not isinstance(answers, dict):
-            if not answers:
-                answers = {"text": [], "answer_start": []}
-            else:
-                answers = {"text": [answers], "answer_start": [int(answer_start)]}#context.index(answers)
-
-        return answers
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='''Copying data from input file and storing it as list of object and writing it in file''')
+    parser.add_argument('--input_file', required=True,help='Input File')
+    parser.add_argument('--output_file', required=False,help='Output File',default="collected_file.jsonl")
+    args = parser.parse_args()
+    passage_question_objects = read_JSONL_file(args.input_file)
+    write_to_JSONL_file(passage_question_objects,args.output_file)
