@@ -24,9 +24,9 @@ class Questions(Data):
         super().__init__(tokenizer, columns, maxlength)
 
         if not self.columns:
-            self.columns = ("question", "context", "answers")
+            self.columns = ("question", "context", "answers", "answer_start")
 
-        self.question, self.context, self.answer = self.columns
+        self.question, self.context, self.answer, self.answer_start = self.columns
         self.stride = stride
         self.rpad = tokenizer.padding_side == "right"
 
